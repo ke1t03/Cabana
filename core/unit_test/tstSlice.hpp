@@ -349,11 +349,50 @@ void atomicAccessTest()
 }
 
 //---------------------------------------------------------------------------//
+void viewInteroperabilityTest()
+{
+    using Members = Cabana::MemberTypes<float[2][3][4], int>;
+    Cabana::AoSoA<Members, TEST_MEMSPACE, 8> aosoa( "view", 11 );
+    auto field = Cabana::slice<0>( aosoa );
+    auto other = Cabana::slice<1>( aosoa );
+    Cabana::deep_copy( field, 7.0f );
+    Cabana::deep_copy( other, -1 );
+
+    auto view = field.view();
+    EXPECT_EQ( view.data(), field.data() );
+    for ( std::size_t d = 0; d < field.viewRank(); ++d )
+    {
+        EXPECT_EQ( view.extent( d ), field.extent( d ) );
+        EXPECT_EQ( view.stride( d ), field.stride( d ) );
+    }
+    Kokkos::parallel_for(
+        "slice_view_alias", Kokkos::RangePolicy<TEST_EXECSPACE>( 0, 1 ),
+        KOKKOS_LAMBDA( int ) {
+            view( 1, 2, 1, 2, 3 ) = 17.0f;
+            field( 0, 1, 2, 3 ) = 19.0f;
+        } );
+    Kokkos::fence();
+
+    auto host = Cabana::create_mirror_view_and_copy( Kokkos::HostSpace(), aosoa );
+    auto host_view = Cabana::slice<0>( host ).view();
+    EXPECT_EQ( host_view( 1, 2, 1, 2, 3 ), 17.0f );
+    EXPECT_EQ( host_view( 0, 0, 1, 2, 3 ), 19.0f );
+    EXPECT_EQ( host_view( 1, 2, 1, 2, 2 ), 7.0f );
+    EXPECT_EQ( Cabana::slice<1>( host )( 10 ), -1 );
+
+    decltype( field ) empty;
+    EXPECT_EQ( empty.arraySize( 0 ), 0 );
+    EXPECT_EQ( empty.view().extent( 0 ), 0 );
+}
+
+//---------------------------------------------------------------------------//
 // RUN TESTS
 //---------------------------------------------------------------------------//
 TEST( Slice, API ) { apiTest( 35 ); }
 // Test with an even multiple of the vector_length; see #836
 TEST( Slice, API_multiple ) { apiTest( 48 ); }
+
+TEST( Slice, ViewInteroperability ) { viewInteroperabilityTest(); }
 
 //---------------------------------------------------------------------------//
 TEST( Slice, RandomAccess ) { randomAccessTest(); }

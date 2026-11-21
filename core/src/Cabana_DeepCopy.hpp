@@ -294,25 +294,11 @@ deep_copy( DstSlice& dst, const SrcSlice& src,
     using dst_type = DstSlice;
     using src_type = SrcSlice;
 
-    // Check that the data types are the same.
-    static_assert( std::is_same_v<typename dst_type::value_type,
-                                  typename src_type::value_type>,
+    static_assert( std::is_same_v<
+                       std::remove_cv_t<typename dst_type::member_data_type>,
+                       std::remove_cv_t<typename src_type::member_data_type>>,
                    "Cabana::deep_copy: Attempted to deep copy Slice objects of "
-                   "different value types" );
-
-    // Check that the element dimensions are the same.
-    static_assert( SrcSlice::view_layout::D0 == SrcSlice::view_layout::D0,
-                   "Cabana::deep_copy: Slice dimension 0 is different" );
-    static_assert( SrcSlice::view_layout::D1 == SrcSlice::view_layout::D1,
-                   "Cabana::deep_copy: Slice dimension 1 is different" );
-    static_assert( SrcSlice::view_layout::D2 == SrcSlice::view_layout::D2,
-                   "Cabana::deep_copy: Slice dimension 2 is different" );
-    static_assert( SrcSlice::view_layout::D3 == SrcSlice::view_layout::D3,
-                   "Cabana::deep_copy: Slice dimension 3 is different" );
-    static_assert( SrcSlice::view_layout::D4 == SrcSlice::view_layout::D4,
-                   "Cabana::deep_copy: Slice dimension 4 is different" );
-    static_assert( SrcSlice::view_layout::D5 == SrcSlice::view_layout::D5,
-                   "Cabana::deep_copy: Slice dimension 5 is different" );
+                   "different member types or dimensions" );
 
     // Check for the same number of elements.
     if ( dst.size() != src.size() )
