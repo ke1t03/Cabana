@@ -386,6 +386,65 @@ void viewInteroperabilityTest()
 }
 
 //---------------------------------------------------------------------------//
+template <int VectorLength>
+void blockBoundaryTest()
+{
+    using Members = Cabana::MemberTypes<int, double[2][1][3], int>;
+    Cabana::AoSoA<Members, TEST_MEMSPACE, VectorLength> aosoa( "blocks" );
+    aosoa.reserve( 2 * VectorLength + 1 );
+
+    for ( int size = 0; size <= 2 * VectorLength + 1; ++size )
+    {
+        SCOPED_TRACE( ::testing::Message()
+                      << "vector length " << VectorLength << ", size " << size );
+        aosoa.resize( size );
+        auto left = Cabana::slice<0>( aosoa );
+        auto field = Cabana::slice<1>( aosoa );
+        auto right = Cabana::slice<2>( aosoa );
+        Cabana::deep_copy( left, -11 );
+        Cabana::deep_copy( right, -22 );
+        Cabana::deep_copy( field, -33.0 );
+
+        Kokkos::parallel_for(
+            "slice_block_boundaries",
+            Kokkos::RangePolicy<TEST_EXECSPACE>( 0, size ),
+            KOKKOS_LAMBDA( const int i ) {
+                const auto view = field.view();
+                const int s = i / VectorLength;
+                const int lane = i % VectorLength;
+                for ( int d0 = 0; d0 < 2; ++d0 )
+                {
+                    field( i, d0, 0, 0 ) = 100 * i + 10 * d0;
+                    field.access( s, lane, d0, 0, 1 ) = 100 * i + 10 * d0 + 1;
+                    view( s, lane, d0, 0, 2 ) = 100 * i + 10 * d0 + 2;
+                }
+            } );
+        Kokkos::fence();
+
+        auto host =
+            Cabana::create_mirror_view_and_copy( Kokkos::HostSpace(), aosoa );
+        for ( std::size_t s = 0; s < host.numSoA(); ++s )
+        {
+            const auto& soa = host.access( s );
+            for ( int lane = 0; lane < VectorLength; ++lane )
+            {
+                EXPECT_EQ( Cabana::get<0>( soa, lane ), -11 );
+                EXPECT_EQ( Cabana::get<2>( soa, lane ), -22 );
+                const int index = s * VectorLength + lane;
+                for ( int d0 = 0; d0 < 2; ++d0 )
+                    for ( int d2 = 0; d2 < 3; ++d2 )
+                    {
+                        const double expected =
+                            index < size ? 100 * index + 10 * d0 + d2 : -33.0;
+                        EXPECT_EQ( Cabana::get<1>( soa, lane, d0, 0, d2 ),
+                                   expected );
+                    }
+            }
+        }
+    }
+}
+
+//---------------------------------------------------------------------------//
 // RUN TESTS
 //---------------------------------------------------------------------------//
 TEST( Slice, API ) { apiTest( 35 ); }
@@ -393,6 +452,26 @@ TEST( Slice, API ) { apiTest( 35 ); }
 TEST( Slice, API_multiple ) { apiTest( 48 ); }
 
 TEST( Slice, ViewInteroperability ) { viewInteroperabilityTest(); }
+
+TEST( Slice, BlockBoundaries )
+{
+    blockBoundaryTest<1>();
+    blockBoundaryTest<4>();
+    blockBoundaryTest<32>();
+}
+
+#ifdef KOKKOS_ENABLE_DEBUG_BOUNDS_CHECK
+TEST( Slice, ChecksEachAxisBeforeFlattening )
+{
+    using Members = Cabana::MemberTypes<float[2]>;
+    Cabana::AoSoA<Members, Kokkos::HostSpace, 8> aosoa( "bounds", 16 );
+    auto slice = Cabana::slice<0>( aosoa );
+    EXPECT_DEATH_IF_SUPPORTED( slice.access( 0, 8, 0 ) = 1.0f,
+                               "out of bounds access" );
+    EXPECT_DEATH_IF_SUPPORTED( slice.access( 0, 0, 2 ) = 1.0f,
+                               "out of bounds access" );
+}
+#endif
 
 //---------------------------------------------------------------------------//
 TEST( Slice, RandomAccess ) { randomAccessTest(); }

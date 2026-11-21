@@ -487,9 +487,9 @@ class Slice
                 const Indices... indices ) const
     {
 #ifdef KOKKOS_ENABLE_DEBUG_BOUNDS_CHECK
-        KOKKOS_ASSERT( s < _num_soa );
-        KOKKOS_ASSERT( a < vector_length );
-        KOKKOS_ASSERT( ( ( indices < std::extent_v<DataType, D> ) && ... ) );
+        if ( s >= _num_soa || a >= vector_length ||
+             ( ( indices >= std::extent_v<DataType, D> ) || ... ) )
+            Kokkos::abort( "Cabana::Slice: out of bounds access" );
 #endif
         // The compiler knows the strides independently of the View metadata.
         const auto component =
