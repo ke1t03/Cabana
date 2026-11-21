@@ -169,13 +169,16 @@ auto kokkosBinSort( KeyViewType keys, Comparator comp,
     using memory_space = typename KeyViewType::memory_space;
     static_assert( is_accessible_from<memory_space, ExecutionSpace>{}, "" );
 
-    Kokkos::BinSort<KeyViewType, Comparator> bin_sort( keys, begin, end, comp,
-                                                       sort_within_bins );
+    using binning_data_type = BinningData<memory_space>;
+    // Keep offsets in the type used by BinningData across Kokkos versions.
+    Kokkos::BinSort<KeyViewType, Comparator, typename KeyViewType::device_type,
+                    typename binning_data_type::size_type>
+        bin_sort( keys, begin, end, comp, sort_within_bins );
     bin_sort.create_permute_vector();
 
-    return BinningData<memory_space>( begin, end, bin_sort.get_bin_count(),
-                                      bin_sort.get_bin_offsets(),
-                                      bin_sort.get_permute_vector() );
+    return binning_data_type( begin, end, bin_sort.get_bin_count(),
+                              bin_sort.get_bin_offsets(),
+                              bin_sort.get_permute_vector() );
 }
 
 //---------------------------------------------------------------------------//
