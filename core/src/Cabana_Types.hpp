@@ -54,10 +54,9 @@ struct RandomAccessMemory
 {
     //! Access type.
     using memory_access_type = RandomAccessMemory;
-    //! Kokkos traits.
+    //! Legacy CUDA Views cannot combine Aligned and RandomAccess for const data.
     using kokkos_memory_traits =
-        Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::Aligned |
-                             Kokkos::RandomAccess>;
+        Kokkos::MemoryTraits<Kokkos::Unmanaged | Kokkos::RandomAccess>;
 };
 
 template <>

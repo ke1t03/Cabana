@@ -264,6 +264,12 @@ void randomAccessTest()
     decltype( da_slice_2 )::random_access_slice ra_slice_2 = da_slice_2;
     decltype( da_slice_3 )::random_access_slice ra_slice_3 = da_slice_3;
 
+    using ConstRandomSlice = Cabana::Slice<
+        const double[dim_1], TEST_MEMSPACE, Cabana::RandomAccessMemory,
+        vector_length, decltype( da_slice_2 )::soa_stride>;
+    ConstRandomSlice const_slice( ra_slice_2.data(), ra_slice_2.size(),
+                                  ra_slice_2.numSoA() );
+
     // Create a second aosoa.
     AoSoA_t aosoa_2( "aosoa_2", num_data );
 
@@ -290,6 +296,10 @@ void randomAccessTest()
             // Member 2.
             for ( int i = 0; i < dim_1; ++i )
                 slice_2( idx, i ) = ra_slice_2( idx, i );
+            const auto const_view = const_slice.view();
+            slice_2( idx, 1 ) = const_view( idx / vector_length,
+                                          idx % vector_length, 1 );
+            slice_2( idx, 2 ) = const_slice( idx, 2 );
 
             // Member 3.
             for ( int i = 0; i < dim_1; ++i )
@@ -332,8 +342,12 @@ void atomicAccessTest()
     // create contention in parallel without the atomic.
     auto increment_op = KOKKOS_LAMBDA( const int )
     {
+        const auto atomic_view = atomic_slice.view();
         for ( int j = 0; j < num_data; ++j )
+        {
             atomic_slice( j ) += 1;
+            atomic_view( j / vector_length, j % vector_length ) += 1;
+        }
     };
     Kokkos::RangePolicy<TEST_EXECSPACE> exec_policy( 0, num_data );
     Kokkos::parallel_for( exec_policy, increment_op );
@@ -345,7 +359,7 @@ void atomicAccessTest()
     auto mirror_slice = Cabana::slice<0>( mirror );
 
     for ( int i = 0; i < num_data; ++i )
-        EXPECT_EQ( mirror_slice( i ), num_data );
+        EXPECT_EQ( mirror_slice( i ), 2 * num_data );
 }
 
 //---------------------------------------------------------------------------//
