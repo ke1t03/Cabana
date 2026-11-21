@@ -1072,6 +1072,27 @@ TEST( LinkedCellList, Stencil3d ) { testLinkedCellStencil3d(); }
 
 TEST( LinkedCellList, AoSoA3d ) { testLinkedList<3>(); }
 
+TEST( LinkedCellList, RebuildParticleRange )
+{
+    Kokkos::View<double* [3], TEST_MEMSPACE> positions( "positions", 3 );
+    Kokkos::deep_copy( positions, 0.25 );
+    const Kokkos::Array<double, 3> delta = { 0.5, 0.5, 0.5 };
+    const Kokkos::Array<double, 3> min = { 0.0, 0.0, 0.0 };
+    const Kokkos::Array<double, 3> max = { 1.0, 1.0, 1.0 };
+    auto list =
+        Cabana::createLinkedCellList( positions, 0, 1, delta, min, max );
+
+    list.build( TEST_EXECSPACE{}, positions, 1, 3 );
+
+    EXPECT_EQ( 1u, list.getParticleBegin() );
+    EXPECT_EQ( 3u, list.getParticleEnd() );
+    auto bins = Kokkos::create_mirror_view_and_copy( Kokkos::HostSpace{},
+                                                     list.getParticleBins() );
+    ASSERT_EQ( 2u, bins.extent( 0 ) );
+    EXPECT_EQ( 0, bins( 0 ) );
+    EXPECT_EQ( 0, bins( 1 ) );
+}
+
 TEST( LinkedCellList, Arrays )
 {
     LCLTestData<3> test_data;

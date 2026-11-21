@@ -25,6 +25,7 @@
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Profiling_ScopedRegion.hpp>
 #include <Kokkos_ScatterView.hpp>
+#include <impl/Kokkos_Profiling_Interface.hpp>
 
 #include <cassert>
 
@@ -154,6 +155,34 @@ class LinkedCellList
     LinkedCellList() = default;
 
     /*!
+      \brief Build a linked cell list on the given execution space instance.
+
+      \param exec_space Execution space instance used to bin particles.
+      \param positions Particle positions.
+      \param begin First particle index to bin.
+      \param end End of the particle range to bin.
+      \param grid_delta Grid sizes in each cardinal direction.
+      \param grid_min Grid minimum value in each direction.
+      \param grid_max Grid maximum value in each direction.
+      \param neighborhood_radius Radius for neighbors.
+      \param cell_size_ratio Ratio of the cell size to the neighborhood size.
+    */
+    template <class ExecutionSpace, class PositionType, class ArrayType,
+              std::enable_if_t<
+                  Kokkos::is_execution_space<ExecutionSpace>::value, int> = 0>
+    LinkedCellList( const ExecutionSpace& exec_space, PositionType positions,
+                    const std::size_t begin, const std::size_t end,
+                    const ArrayType& grid_delta, const ArrayType& grid_min,
+                    const ArrayType& grid_max, const Scalar neighborhood_radius,
+                    const Scalar cell_size_ratio = 1 )
+        : _grid( grid_min, grid_max, grid_delta )
+        , _cell_stencil( neighborhood_radius, cell_size_ratio, grid_min,
+                         grid_max )
+    {
+        build( exec_space, positions, begin, end );
+    }
+
+    /*!
       \brief Simple constructor
 
       \tparam PositionType Type for positions.
@@ -180,15 +209,10 @@ class LinkedCellList
         typename std::enable_if<( is_slice<PositionType>::value ||
                                   Kokkos::is_view<PositionType>::value ),
                                 int>::type* = 0 )
-        : _begin( 0 )
-        , _end( size( positions ) )
-        , _grid( grid_min, grid_max, grid_delta )
+        : _grid( grid_min, grid_max, grid_delta )
         , _cell_stencil( grid_delta[0], 1.0, grid_min, grid_max )
-        , _sorted( false )
     {
-        std::size_t np = size( positions );
-        allocate( totalBins(), np );
-        build( positions, 0, np );
+        build( positions );
     }
 
     /*!
@@ -224,13 +248,9 @@ class LinkedCellList
         typename std::enable_if<( is_slice<PositionType>::value ||
                                   Kokkos::is_view<PositionType>::value ),
                                 int>::type* = 0 )
-        : _begin( begin )
-        , _end( end )
-        , _grid( grid_min, grid_max, grid_delta )
+        : _grid( grid_min, grid_max, grid_delta )
         , _cell_stencil( grid_delta[0], 1.0, grid_min, grid_max )
-        , _sorted( false )
     {
-        allocate( totalBins(), end - begin );
         build( positions, begin, end );
     }
 
@@ -264,16 +284,11 @@ class LinkedCellList
         typename std::enable_if<( is_slice<PositionType>::value ||
                                   Kokkos::is_view<PositionType>::value ),
                                 int>::type* = 0 )
-        : _begin( 0 )
-        , _end( size( positions ) )
-        , _grid( grid_min, grid_max, grid_delta )
+        : _grid( grid_min, grid_max, grid_delta )
         , _cell_stencil( neighborhood_radius, cell_size_ratio, grid_min,
                          grid_max )
-        , _sorted( false )
     {
-        std::size_t np = size( positions );
-        allocate( totalBins(), np );
-        build( positions, 0, np );
+        build( positions );
     }
 
     /*!
@@ -312,14 +327,10 @@ class LinkedCellList
         typename std::enable_if<( is_slice<PositionType>::value ||
                                   Kokkos::is_view<PositionType>::value ),
                                 int>::type* = 0 )
-        : _begin( begin )
-        , _end( end )
-        , _grid( grid_min, grid_max, grid_delta )
+        : _grid( grid_min, grid_max, grid_delta )
         , _cell_stencil( neighborhood_radius, cell_size_ratio, grid_min,
                          grid_max )
-        , _sorted( false )
     {
-        allocate( totalBins(), end - begin );
         build( positions, begin, end );
     }
 
@@ -341,15 +352,10 @@ class LinkedCellList
         typename std::enable_if<( is_slice<PositionType>::value ||
                                   Kokkos::is_view<PositionType>::value ),
                                 int>::type* = 0 )
-        : _begin( 0 )
-        , _end( size( positions ) )
-        , _grid( grid_min, grid_max, grid_delta )
+        : _grid( grid_min, grid_max, grid_delta )
         , _cell_stencil( grid_delta[0], 1.0, grid_min, grid_max )
-        , _sorted( false )
     {
-        std::size_t np = size( positions );
-        allocate( totalBins(), np );
-        build( positions, 0, np );
+        build( positions );
     }
 
     /*!
@@ -377,13 +383,9 @@ class LinkedCellList
         typename std::enable_if<( is_slice<PositionType>::value ||
                                   Kokkos::is_view<PositionType>::value ),
                                 int>::type* = 0 )
-        : _begin( begin )
-        , _end( end )
-        , _grid( grid_min, grid_max, grid_delta )
+        : _grid( grid_min, grid_max, grid_delta )
         , _cell_stencil( grid_delta[0], 1.0, grid_min, grid_max )
-        , _sorted( false )
     {
-        allocate( totalBins(), end - begin );
         build( positions, begin, end );
     }
 
@@ -408,16 +410,11 @@ class LinkedCellList
         typename std::enable_if<( is_slice<PositionType>::value ||
                                   Kokkos::is_view<PositionType>::value ),
                                 int>::type* = 0 )
-        : _begin( 0 )
-        , _end( size( positions ) )
-        , _grid( grid_min, grid_max, grid_delta )
+        : _grid( grid_min, grid_max, grid_delta )
         , _cell_stencil( neighborhood_radius, cell_size_ratio, grid_min,
                          grid_max )
-        , _sorted( false )
     {
-        std::size_t np = size( positions );
-        allocate( totalBins(), np );
-        build( positions, 0, np );
+        build( positions );
     }
 
     /*!
@@ -448,14 +445,10 @@ class LinkedCellList
         typename std::enable_if<( is_slice<PositionType>::value ||
                                   Kokkos::is_view<PositionType>::value ),
                                 int>::type* = 0 )
-        : _begin( begin )
-        , _end( end )
-        , _grid( grid_min, grid_max, grid_delta )
+        : _grid( grid_min, grid_max, grid_delta )
         , _cell_stencil( neighborhood_radius, cell_size_ratio, grid_min,
                          grid_max )
-        , _sorted( false )
     {
-        allocate( totalBins(), end - begin );
         build( positions, begin, end );
     }
 
@@ -640,6 +633,7 @@ class LinkedCellList
       \tparam ExecutionSpace Kokkos execution space.
       \tparam PositionType Type for positions.
 
+      \param exec_space Execution space instance used to bin particles.
       \param positions Particle positions.
       \param begin The beginning index of particles to bin or find neighbors
       for. Particles outside this range will NOT be considered as candidate
@@ -649,8 +643,8 @@ class LinkedCellList
       neighbors.
     */
     template <class ExecutionSpace, class PositionType>
-    void build( ExecutionSpace, PositionType positions, const std::size_t begin,
-                const std::size_t end )
+    void build( const ExecutionSpace& exec_space, PositionType positions,
+                const std::size_t begin, const std::size_t end )
     {
         Kokkos::Profiling::ScopedRegion region(
             "Cabana::LinkedCellList::build" );
@@ -659,30 +653,48 @@ class LinkedCellList
         assert( end >= begin );
         assert( end <= size( positions ) );
 
-        // Resize the binning data. Note that the permutation vector spans
-        // only the length of begin-end;
-        std::size_t ncell = totalBins();
-        if ( _counts.extent( 0 ) != ncell )
-        {
-            Kokkos::resize( _counts, ncell );
-            Kokkos::resize( _offsets, ncell );
-        }
-        std::size_t nparticles = end - begin;
-        if ( _permutes.extent( 0 ) != nparticles )
-        {
-            Kokkos::resize( _permutes, nparticles );
-        }
-
-        // Get local copies of class data for lambda function capture.
-        auto grid = _grid;
+        // Streams on the same device can reuse the same storage.
+        const auto device_id = Kokkos::Tools::Experimental::DeviceTypeTraits<
+            ExecutionSpace>::device_id( exec_space );
+        const bool device_changed = device_id != _device_id;
+        const std::size_t ncell = totalBins();
+        const std::size_t nparticles = end - begin;
         auto counts = _counts;
         auto offsets = _offsets;
         auto permutes = _permutes;
+        auto particle_bins = _particle_bins;
+        if ( device_changed || counts.extent( 0 ) != ncell )
+        {
+            counts = CountView( Kokkos::view_alloc( exec_space,
+                                                    Kokkos::WithoutInitializing,
+                                                    "counts" ),
+                                ncell );
+            offsets = OffsetView(
+                Kokkos::view_alloc( exec_space, Kokkos::WithoutInitializing,
+                                    "offsets" ),
+                ncell );
+        }
+        if ( device_changed || permutes.extent( 0 ) != nparticles )
+        {
+            permutes = OffsetView(
+                Kokkos::view_alloc( exec_space, Kokkos::WithoutInitializing,
+                                    "permutes" ),
+                nparticles );
+            particle_bins = CountView(
+                Kokkos::view_alloc( exec_space, Kokkos::WithoutInitializing,
+                                    "particle_bins" ),
+                nparticles );
+        }
 
         // Count.
-        Kokkos::RangePolicy<ExecutionSpace> particle_range( begin, end );
-        Kokkos::deep_copy( _counts, 0 );
-        auto counts_sv = Kokkos::Experimental::create_scatter_view( _counts );
+        auto grid = _grid;
+        Kokkos::RangePolicy<ExecutionSpace> particle_range( exec_space, begin,
+                                                            end );
+        Kokkos::deep_copy( exec_space, counts, 0 );
+        using device_type = Kokkos::Device<ExecutionSpace, memory_space>;
+        Kokkos::Experimental::ScatterView<
+            int*, typename CountView::array_layout, device_type>
+            counts_sv( exec_space, counts );
         auto cell_count = KOKKOS_LAMBDA( const std::size_t p )
         {
             Kokkos::Array<int, num_space_dim> ijk;
@@ -695,11 +707,10 @@ class LinkedCellList
         };
         Kokkos::parallel_for( "Cabana::LinkedCellList::build::cell_count",
                               particle_range, cell_count );
-        Kokkos::fence();
-        Kokkos::Experimental::contribute( _counts, counts_sv );
+        Kokkos::Experimental::contribute( exec_space, counts, counts_sv );
 
         // Compute offsets.
-        Kokkos::RangePolicy<ExecutionSpace> cell_range( 0, ncell );
+        Kokkos::RangePolicy<ExecutionSpace> cell_range( exec_space, 0, ncell );
         auto offset_scan = KOKKOS_LAMBDA( const std::size_t c, int& update,
                                           const bool final_pass )
         {
@@ -709,10 +720,9 @@ class LinkedCellList
         };
         Kokkos::parallel_scan( "Cabana::LinkedCellList::build::offset_scan",
                                cell_range, offset_scan );
-        Kokkos::fence();
 
         // Reset counts.
-        Kokkos::deep_copy( _counts, 0 );
+        Kokkos::deep_copy( exec_space, counts, 0 );
 
         // Compute the permutation vector.
         auto create_permute = KOKKOS_LAMBDA( const std::size_t p )
@@ -728,14 +738,22 @@ class LinkedCellList
         };
         Kokkos::parallel_for( "Cabana::LinkedCellList::build::create_permute",
                               particle_range, create_permute );
-        Kokkos::fence();
 
         // Create the binning data.
-        _bin_data = BinningData<MemorySpace>( begin, end, _counts, _offsets,
-                                              _permutes );
+        _counts = counts;
+        _offsets = offsets;
+        _permutes = permutes;
+        _particle_bins = particle_bins;
+        _device_id = device_id;
+        _begin = begin;
+        _end = end;
+        _sorted = false;
+        _bin_data =
+            BinningData<MemorySpace>( begin, end, counts, offsets, permutes );
 
         // Store the bin per particle (for neighbor iteration).
-        storeParticleBins();
+        storeParticleBinsImpl( exec_space );
+        exec_space.fence();
     }
 
     /*!
@@ -775,12 +793,19 @@ class LinkedCellList
     /*!
       \brief Store the bin cell index for each binned particle.
     */
-    void storeParticleBins()
+    void storeParticleBins() { storeParticleBinsImpl( execution_space{} ); }
+
+    //! \cond Impl
+    template <class ExecutionSpace>
+    void storeParticleBinsImpl( const ExecutionSpace& exec_space )
     {
+        auto list = *this;
         Kokkos::parallel_for(
             "Cabana::LinkedCellList::storeBinIndices",
-            Kokkos::RangePolicy<execution_space>( 0, totalBins() ), *this );
+            Kokkos::RangePolicy<ExecutionSpace>( exec_space, 0, totalBins() ),
+            KOKKOS_LAMBDA( const int i ) { list( i ); } );
     }
+    //! \endcond
 
     /*!
       \brief Get the bin cell index for each binned particle.
@@ -872,8 +897,8 @@ class LinkedCellList
     }
 
   private:
-    std::size_t _begin;
-    std::size_t _end;
+    std::size_t _begin = 0;
+    std::size_t _end = 0;
 
     // Building the linked cell.
     BinningData<MemorySpace> _bin_data;
@@ -882,30 +907,13 @@ class LinkedCellList
     CountView _counts;
     OffsetView _offsets;
     OffsetView _permutes;
+    int _device_id = -1;
 
     // Iterating over the linked cell.
     stencil_type _cell_stencil;
 
-    bool _sorted;
+    bool _sorted = false;
     CountView _particle_bins;
-
-    void allocate( const int ncell, const int nparticles )
-    {
-        _counts = CountView(
-            Kokkos::view_alloc( Kokkos::WithoutInitializing, "counts" ),
-            ncell );
-        _offsets = OffsetView(
-            Kokkos::view_alloc( Kokkos::WithoutInitializing, "offsets" ),
-            ncell );
-        _permutes = OffsetView(
-            Kokkos::view_alloc( Kokkos::WithoutInitializing, "permutes" ),
-            nparticles );
-        // This is only used for iterating over the particles (not building the
-        // permutaion vector).
-        _particle_bins = CountView(
-            Kokkos::view_alloc( Kokkos::WithoutInitializing, "counts" ),
-            nparticles );
-    }
 };
 
 /*!

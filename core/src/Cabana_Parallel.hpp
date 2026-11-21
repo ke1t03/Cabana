@@ -273,7 +273,7 @@ inline void neighbor_parallel_for(
     auto begin = exec_policy.begin();
     auto end = exec_policy.end();
     using linear_policy_type = Kokkos::RangePolicy<execution_space, void, void>;
-    linear_policy_type linear_exec_policy( begin, end );
+    linear_policy_type linear_exec_policy( exec_policy.space(), begin, end );
 
     static_assert( is_accessible_from<memory_space, execution_space>{}, "" );
 
@@ -337,7 +337,7 @@ inline void neighbor_parallel_for(
     auto begin = exec_policy.begin();
     auto end = exec_policy.end();
     using linear_policy_type = Kokkos::RangePolicy<execution_space, void, void>;
-    linear_policy_type linear_exec_policy( begin, end );
+    linear_policy_type linear_exec_policy( exec_policy.space(), begin, end );
 
     static_assert( is_accessible_from<memory_space, execution_space>{}, "" );
 
@@ -400,7 +400,8 @@ inline void neighbor_parallel_for(
 
     using kokkos_policy =
         Kokkos::TeamPolicy<execution_space, Kokkos::Schedule<Kokkos::Dynamic>>;
-    kokkos_policy team_policy( exec_policy.end() - exec_policy.begin(),
+    kokkos_policy team_policy( exec_policy.space(),
+                               exec_policy.end() - exec_policy.begin(),
                                Kokkos::AUTO );
 
     using index_type = typename kokkos_policy::index_type;
@@ -472,7 +473,8 @@ inline void neighbor_parallel_for(
 
     using kokkos_policy =
         Kokkos::TeamPolicy<execution_space, Kokkos::Schedule<Kokkos::Dynamic>>;
-    kokkos_policy team_policy( exec_policy.end() - exec_policy.begin(),
+    kokkos_policy team_policy( exec_policy.space(),
+                               exec_policy.end() - exec_policy.begin(),
                                Kokkos::AUTO );
 
     using index_type = typename kokkos_policy::index_type;
@@ -551,7 +553,8 @@ inline void neighbor_parallel_for(
 
     using kokkos_policy =
         Kokkos::TeamPolicy<execution_space, Kokkos::Schedule<Kokkos::Dynamic>>;
-    kokkos_policy team_policy( exec_policy.end() - exec_policy.begin(),
+    kokkos_policy team_policy( exec_policy.space(),
+                               exec_policy.end() - exec_policy.begin(),
                                Kokkos::AUTO );
 
     using index_type = typename kokkos_policy::index_type;
@@ -663,7 +666,7 @@ inline void neighbor_parallel_reduce(
     auto begin = exec_policy.begin();
     auto end = exec_policy.end();
     using linear_policy_type = Kokkos::RangePolicy<execution_space, void, void>;
-    linear_policy_type linear_exec_policy( begin, end );
+    linear_policy_type linear_exec_policy( exec_policy.space(), begin, end );
 
     static_assert( is_accessible_from<memory_space, execution_space>{}, "" );
 
@@ -734,7 +737,7 @@ inline void neighbor_parallel_reduce(
     auto begin = exec_policy.begin();
     auto end = exec_policy.end();
     using linear_policy_type = Kokkos::RangePolicy<execution_space, void, void>;
-    linear_policy_type linear_exec_policy( begin, end );
+    linear_policy_type linear_exec_policy( exec_policy.space(), begin, end );
 
     static_assert( is_accessible_from<memory_space, execution_space>{}, "" );
 
@@ -804,7 +807,8 @@ inline void neighbor_parallel_reduce(
 
     using kokkos_policy =
         Kokkos::TeamPolicy<execution_space, Kokkos::Schedule<Kokkos::Dynamic>>;
-    kokkos_policy team_policy( exec_policy.end() - exec_policy.begin(),
+    kokkos_policy team_policy( exec_policy.space(),
+                               exec_policy.end() - exec_policy.begin(),
                                Kokkos::AUTO );
 
     using index_type = typename kokkos_policy::index_type;
@@ -886,7 +890,8 @@ inline void neighbor_parallel_reduce(
 
     using kokkos_policy =
         Kokkos::TeamPolicy<execution_space, Kokkos::Schedule<Kokkos::Dynamic>>;
-    kokkos_policy team_policy( exec_policy.end() - exec_policy.begin(),
+    kokkos_policy team_policy( exec_policy.space(),
+                               exec_policy.end() - exec_policy.begin(),
                                Kokkos::AUTO );
 
     using index_type = typename kokkos_policy::index_type;
@@ -973,7 +978,8 @@ inline void neighbor_parallel_reduce(
 
     using kokkos_policy =
         Kokkos::TeamPolicy<execution_space, Kokkos::Schedule<Kokkos::Dynamic>>;
-    kokkos_policy team_policy( exec_policy.end() - exec_policy.begin(),
+    kokkos_policy team_policy( exec_policy.space(),
+                               exec_policy.end() - exec_policy.begin(),
                                Kokkos::AUTO );
 
     using index_type = typename kokkos_policy::index_type;
@@ -1530,7 +1536,7 @@ inline void neighbor_parallel_for(
 
     using linear_policy_type =
         Kokkos::RangePolicy<SerialOpTag, execution_space>;
-    linear_policy_type linear_exec_policy( begin, end );
+    linear_policy_type linear_exec_policy( exec_policy.space(), begin, end );
 
     static_assert( is_accessible_from<memory_space, execution_space>{}, "" );
 
@@ -1577,7 +1583,8 @@ inline void neighbor_parallel_for(
     using team_policy_type =
         Kokkos::TeamPolicy<TeamOpTag, execution_space,
                            Kokkos::Schedule<Kokkos::Dynamic>>;
-    team_policy_type team_policy( exec_policy.end() - exec_policy.begin(),
+    team_policy_type team_policy( exec_policy.space(),
+                                  exec_policy.end() - exec_policy.begin(),
                                   Kokkos::AUTO );
 
     using memory_space = typename LinkedCellType::memory_space;
@@ -1657,7 +1664,7 @@ inline void neighbor_parallel_reduce(
 
     using linear_policy_type =
         Kokkos::RangePolicy<SerialOpTag, execution_space>;
-    linear_policy_type linear_exec_policy( begin, end );
+    linear_policy_type linear_exec_policy( exec_policy.space(), begin, end );
 
     static_assert( is_accessible_from<memory_space, execution_space>{}, "" );
 
@@ -1707,7 +1714,8 @@ inline void neighbor_parallel_reduce(
     using team_policy_type =
         Kokkos::TeamPolicy<TeamOpTag, execution_space,
                            Kokkos::Schedule<Kokkos::Dynamic>>;
-    team_policy_type team_policy( exec_policy.end() - exec_policy.begin(),
+    team_policy_type team_policy( exec_policy.space(),
+                                  exec_policy.end() - exec_policy.begin(),
                                   Kokkos::AUTO );
 
     using memory_space = typename LinkedCellType::memory_space;

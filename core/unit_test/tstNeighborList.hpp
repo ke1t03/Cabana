@@ -57,11 +57,11 @@ void testVerletListFull()
     }
     // Check again, building with a large array allocation size
     {
-        Cabana::VerletList<TEST_MEMSPACE, Cabana::FullNeighborTag, LayoutTag,
-                           BuildTag, Dim>
-            nlist_max( position, 0, position.size(), test_data.test_radius,
-                       test_data.cell_size_ratio, test_data.grid_min,
-                       test_data.grid_max, 100 );
+        auto nlist_max = Cabana::createVerletList<Cabana::FullNeighborTag,
+                                                  LayoutTag, BuildTag>(
+            TEST_EXECSPACE{}, position, test_data.test_radius,
+            test_data.cell_size_ratio, test_data.grid_min, test_data.grid_max,
+            100 );
         checkFullNeighborList( nlist_max, test_data.N2_list_copy,
                                test_data.num_particle );
     }
@@ -127,12 +127,19 @@ void testVerletListFullPartialRange()
     NeighborListTestData<Dim> test_data;
     auto position = Cabana::slice<0>( test_data.aosoa );
 
-    // Create the neighbor list.
-    Cabana::VerletList<TEST_MEMSPACE, Cabana::FullNeighborTag, LayoutTag,
-                       BuildTag, Dim>
-        nlist( position, test_data.begin, test_data.end, test_data.test_radius,
-               test_data.cell_size_ratio, test_data.grid_min,
-               test_data.grid_max );
+    // Use a different host execution space when both are enabled.
+#if defined( KOKKOS_ENABLE_SERIAL ) && defined( KOKKOS_ENABLE_OPENMP )
+    using BuildSpace =
+        std::conditional_t<std::is_same_v<TEST_EXECSPACE, Kokkos::OpenMP>,
+                           Kokkos::Serial, TEST_EXECSPACE>;
+#else
+    using BuildSpace = TEST_EXECSPACE;
+#endif
+    auto nlist =
+        Cabana::createVerletList<Cabana::FullNeighborTag, LayoutTag, BuildTag>(
+            BuildSpace{}, position, test_data.begin, test_data.end,
+            test_data.test_radius, test_data.cell_size_ratio,
+            test_data.grid_min, test_data.grid_max );
 
     // Check the neighbor list.
     checkFullNeighborListPartialRange( nlist, test_data.N2_list_copy,
@@ -626,6 +633,58 @@ TEST( VerletList, View2d )
 #endif
     testNeighborView<2, Cabana::VerletLayout2D>();
 }
+
+#ifdef KOKKOS_ENABLE_CUDA
+TEST( VerletList, AllocateOnSelectedCudaDevice )
+{
+    int device_count = 0;
+    ASSERT_EQ( cudaSuccess, cudaGetDeviceCount( &device_count ) );
+    if ( !std::is_same_v<TEST_MEMSPACE, Kokkos::CudaSpace> || device_count < 2 )
+        GTEST_SKIP() << "Requires a CUDA test with two GPUs";
+
+    int previous_device = 0;
+    ASSERT_EQ( cudaSuccess, cudaGetDevice( &previous_device ) );
+    const int device = ( Kokkos::Cuda{}.cuda_device() + 1 ) % device_count;
+    ASSERT_EQ( cudaSuccess, cudaSetDevice( device ) );
+    cudaStream_t stream;
+    const auto status =
+        cudaStreamCreateWithFlags( &stream, cudaStreamNonBlocking );
+    if ( status != cudaSuccess )
+        EXPECT_EQ( cudaSuccess, cudaSetDevice( previous_device ) );
+    ASSERT_EQ( cudaSuccess, status );
+    {
+        const Kokkos::Cuda exec( stream );
+        auto expect_device = [device]( const void* ptr )
+        {
+            cudaPointerAttributes attributes{};
+            ASSERT_EQ( cudaSuccess,
+                       cudaPointerGetAttributes( &attributes, ptr ) );
+            EXPECT_EQ( device, attributes.device );
+        };
+        const Kokkos::Array<double, 3> delta = { 0.5, 0.5, 0.5 };
+        const Kokkos::Array<double, 3> min = { 0.0, 0.0, 0.0 };
+        const Kokkos::Array<double, 3> max = { 1.0, 1.0, 1.0 };
+        using PositionView = Kokkos::View<double* [3], Kokkos::CudaSpace>;
+        PositionView positions( Kokkos::view_alloc( exec, "positions" ), 2 );
+        PositionView default_positions( "default_positions", 2 );
+        auto cells =
+            Cabana::createLinkedCellList( default_positions, delta, min, max );
+        cells.build( exec, positions, 0, 2 );
+        expect_device( cells.getParticleBins().data() );
+
+        auto list = Cabana::createVerletList<Cabana::FullNeighborTag,
+                                             Cabana::VerletLayoutCSR,
+                                             Cabana::TeamOpTag>(
+            exec, positions, 0.5, 1.0, min, max );
+        expect_device( list._data.counts.data() );
+        expect_device( list._data.offsets.data() );
+        expect_device( list._data.neighbors.data() );
+    }
+    EXPECT_EQ( cudaSuccess, cudaSetDevice( device ) );
+    EXPECT_EQ( cudaSuccess, cudaStreamDestroy( stream ) );
+    EXPECT_EQ( cudaSuccess, cudaSetDevice( previous_device ) );
+}
+#endif
 //---------------------------------------------------------------------------//
 
 } // end namespace Test
