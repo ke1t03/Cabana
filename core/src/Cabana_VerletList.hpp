@@ -226,7 +226,8 @@ struct VerletListBuilder
         // Shallow copy for random access read-only memory.
         _position = positions;
 
-        double grid_size = cell_size_ratio * neighborhood_radius;
+        const PositionValueType grid_size =
+            cell_size_ratio * neighborhood_radius;
         ArrayType grid_delta;
         for ( std::size_t d = 0; d < num_space_dim; ++d )
             grid_delta[d] = grid_size;
@@ -246,8 +247,9 @@ struct VerletListBuilder
 
     // Check if particle pair i-j is within cutoff, potentially with variable
     // radii.
-    KOKKOS_INLINE_FUNCTION auto withinCutoff( [[maybe_unused]] const int i,
-                                              const double dist_sqr ) const
+    KOKKOS_INLINE_FUNCTION auto
+    withinCutoff( [[maybe_unused]] const int i,
+                  const PositionValueType dist_sqr ) const
     {
         // Square the radius on the fly if using a per-particle field to avoid a
         // deep copy.
@@ -261,9 +263,9 @@ struct VerletListBuilder
 
     // Check if potential neighbor j is NOT within cutoff, meaning particle i
     // should add instead for symmetry.
-    KOKKOS_INLINE_FUNCTION auto
-    neighborNotWithinCutoff( [[maybe_unused]] const int j,
-                             [[maybe_unused]] const double dist_sqr ) const
+    KOKKOS_INLINE_FUNCTION auto neighborNotWithinCutoff(
+        [[maybe_unused]] const int j,
+        [[maybe_unused]] const PositionValueType dist_sqr ) const
     {
         // This neighbor needs to be added if they will not find this particle.
         if constexpr ( is_slice<RadiusType>::value ||
@@ -279,8 +281,9 @@ struct VerletListBuilder
     }
 
     // Count neighbors, with consideration for self particle i and neighbor j.
-    KOKKOS_INLINE_FUNCTION auto countNeighbor( const int i, const int j,
-                                               const double dist_sqr ) const
+    KOKKOS_INLINE_FUNCTION auto
+    countNeighbor( const int i, const int j,
+                   const PositionValueType dist_sqr ) const
     {
         int c = 0;
         // Always add self if within cutoff.
@@ -295,8 +298,9 @@ struct VerletListBuilder
     }
 
     // Add neighbors, with consideration for self particle i and neighbor j.
-    KOKKOS_INLINE_FUNCTION void addNeighbor( const int i, const int j,
-                                             const double dist_sqr ) const
+    KOKKOS_INLINE_FUNCTION void
+    addNeighbor( const int i, const int j,
+                 const PositionValueType dist_sqr ) const
     {
         // Always add self if within cutoff.
         if ( withinCutoff( i, dist_sqr ) )
@@ -423,7 +427,7 @@ struct VerletListBuilder
     KOKKOS_INLINE_FUNCTION void
     neighbor_reduce( const typename CountNeighborsPolicy::member_type& team,
                      const std::size_t pid,
-                     const Kokkos::Array<double, num_space_dim> xp,
+                     const Kokkos::Array<PositionValueType, num_space_dim> xp,
                      const int n_offset, const int num_n, int& cell_count,
                      TeamVectorOpTag ) const
     {
@@ -436,11 +440,10 @@ struct VerletListBuilder
 
     // Neighbor count serial loop (only used for CSR lists).
     KOKKOS_INLINE_FUNCTION
-    void neighbor_reduce( const typename CountNeighborsPolicy::member_type,
-                          const std::size_t pid,
-                          const Kokkos::Array<double, num_space_dim> xp,
-                          const int n_offset, const int num_n, int& cell_count,
-                          TeamOpTag ) const
+    void neighbor_reduce(
+        const typename CountNeighborsPolicy::member_type, const std::size_t pid,
+        const Kokkos::Array<PositionValueType, num_space_dim> xp,
+        const int n_offset, const int num_n, int& cell_count, TeamOpTag ) const
     {
         for ( int n = 0; n < num_n; n++ )
             neighbor_kernel( pid, xp, n_offset, n, cell_count );
@@ -448,16 +451,16 @@ struct VerletListBuilder
 
     // Neighbor count kernel
     KOKKOS_INLINE_FUNCTION
-    void neighbor_kernel( const int pid,
-                          const Kokkos::Array<double, num_space_dim> xp,
-                          const int n_offset, const int n,
-                          int& local_count ) const
+    void
+    neighbor_kernel( const int pid,
+                     const Kokkos::Array<PositionValueType, num_space_dim> xp,
+                     const int n_offset, const int n, int& local_count ) const
     {
         //  Get the true id of the candidate  neighbor.
         std::size_t nid = linked_cell_list.permutation( n_offset + n );
 
         // Cache the candidate neighbor particle coordinates.
-        Kokkos::Array<double, num_space_dim> xn;
+        Kokkos::Array<PositionValueType, num_space_dim> xn;
         for ( std::size_t d = 0; d < num_space_dim; ++d )
             xn[d] = _position( nid, d );
 
@@ -466,7 +469,7 @@ struct VerletListBuilder
         {
             // Calculate the distance between the particle and its candidate
             // neighbor.
-            PositionValueType dist_sqr = 0.0;
+            PositionValueType dist_sqr = 0;
             for ( std::size_t d = 0; d < num_space_dim; ++d )
             {
                 PositionValueType dx = xp[d] - xn[d];
@@ -668,7 +671,7 @@ struct VerletListBuilder
     KOKKOS_INLINE_FUNCTION void
     neighbor_for( const typename FillNeighborsPolicy::member_type& team,
                   const std::size_t pid,
-                  const Kokkos::Array<double, num_space_dim> xp,
+                  const Kokkos::Array<PositionValueType, num_space_dim> xp,
                   const int n_offset, const int num_n, TeamVectorOpTag ) const
     {
         Kokkos::parallel_for( Kokkos::ThreadVectorRange( team, num_n ),
@@ -680,7 +683,7 @@ struct VerletListBuilder
     KOKKOS_INLINE_FUNCTION
     void neighbor_for( const typename FillNeighborsPolicy::member_type team,
                        const std::size_t pid,
-                       const Kokkos::Array<double, num_space_dim> xp,
+                       const Kokkos::Array<PositionValueType, num_space_dim> xp,
                        const int n_offset, const int num_n, TeamOpTag ) const
     {
         for ( int n = 0; n < num_n; n++ )
@@ -690,15 +693,16 @@ struct VerletListBuilder
 
     // Neighbor fill kernel.
     KOKKOS_INLINE_FUNCTION
-    void neighbor_kernel( const int pid,
-                          const Kokkos::Array<double, num_space_dim> xp,
-                          const int n_offset, const int n ) const
+    void
+    neighbor_kernel( const int pid,
+                     const Kokkos::Array<PositionValueType, num_space_dim> xp,
+                     const int n_offset, const int n ) const
     {
         //  Get the true id of the candidate neighbor.
         std::size_t nid = linked_cell_list.permutation( n_offset + n );
 
         // Cache the candidate neighbor particle coordinates.
-        Kokkos::Array<double, num_space_dim> xn;
+        Kokkos::Array<PositionValueType, num_space_dim> xn;
         for ( std::size_t d = 0; d < num_space_dim; ++d )
             xn[d] = _position( nid, d );
 
@@ -707,7 +711,7 @@ struct VerletListBuilder
         {
             // Calculate the distance between the particle and its candidate
             // neighbor.
-            PositionValueType dist_sqr = 0.0;
+            PositionValueType dist_sqr = 0;
             for ( std::size_t d = 0; d < num_space_dim; ++d )
             {
                 PositionValueType dx = xp[d] - xn[d];
@@ -837,6 +841,7 @@ auto createVerletListBuilder(
 
   Neighbor list implementation most appropriate for somewhat regularly
   distributed particles due to the use of a Cartesian grid.
+  Grid and distance calculations use the scalar type of the particle positions.
 */
 template <class MemorySpace, class AlgorithmTag, class LayoutTag,
           class BuildTag = TeamVectorOpTag, std::size_t NumSpaceDim = 3>

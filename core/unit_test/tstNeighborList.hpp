@@ -402,9 +402,69 @@ void testVerletListArrays( ArrayType grid_min, ArrayType grid_max )
                            test_data.num_particle );
 }
 
+template <std::size_t Dim>
+void testVerletListFloatPositions()
+{
+    constexpr int num_particle = 5;
+    constexpr float radius = 0.1875f;
+    // A large origin magnifies rounding when using absolute cell centers.
+    constexpr float origin = 1.0e6f;
+    using DataTypes = Cabana::MemberTypes<float[Dim]>;
+    Cabana::AoSoA<DataTypes, TEST_MEMSPACE> aosoa( "particles", num_particle );
+    auto position = Cabana::slice<0>( aosoa );
+    Kokkos::View<float* [Dim], TEST_MEMSPACE> view( "positions", num_particle );
+    Kokkos::Array<float, Dim> grid_min;
+    Kokkos::Array<float, Dim> grid_max;
+    for ( std::size_t d = 0; d < Dim; ++d )
+    {
+        grid_min[d] = origin;
+        grid_max[d] = origin + 4.0f;
+    }
+
+    Kokkos::parallel_for(
+        Kokkos::RangePolicy<TEST_EXECSPACE>( 0, num_particle ),
+        KOKKOS_LAMBDA( const int p ) {
+            for ( std::size_t d = 0; d < Dim; ++d )
+            {
+                // Use the last axis for half-list ordering and include points
+                // on cell boundaries and exactly at the distance cutoff.
+                const float x =
+                    origin + ( d == Dim - 1 ? 1.625f + radius * p : 2.0f );
+                position( p, d ) = x;
+                view( p, d ) = x;
+            }
+        } );
+    Kokkos::fence();
+
+    auto reference = createTestListHostCopy(
+        computeFullNeighborList<Dim>( position, radius ) );
+    auto full =
+        Cabana::createVerletList<Cabana::FullNeighborTag,
+                                 Cabana::VerletLayout2D, Cabana::TeamOpTag>(
+            view, radius, 0.5f, grid_min, grid_max );
+    checkFullNeighborList( full, reference, num_particle );
+
+    auto half = Cabana::createVerletList<Cabana::HalfNeighborTag,
+                                         Cabana::VerletLayout2D,
+                                         Cabana::TeamVectorOpTag>(
+        position, radius, 0.5f, grid_min, grid_max );
+    auto half_copy = copyListToHost( half, num_particle, num_particle );
+    for ( int p = 0; p < num_particle - 1; ++p )
+    {
+        EXPECT_EQ( half_copy.counts( p ), 1 );
+        EXPECT_EQ( half_copy.neighbors( p, 0 ), p + 1 );
+    }
+    EXPECT_EQ( half_copy.counts( num_particle - 1 ), 0 );
+    EXPECT_FALSE(
+        Cabana::NeighborDiscriminator<Cabana::HalfNeighborTag>::isValid(
+            0, grid_min, 1, grid_min ) );
+}
+
 //---------------------------------------------------------------------------//
 // 3D TESTS
 //---------------------------------------------------------------------------//
+TEST( VerletList, FloatPositions3d ) { testVerletListFloatPositions<3>(); }
+
 TEST( VerletList, Full3d )
 {
 #ifndef KOKKOS_ENABLE_OPENMPTARGET // FIXME_OPENMPTARGET
@@ -528,6 +588,8 @@ TEST( VerletList, View3d )
 //---------------------------------------------------------------------------//
 // 2D TESTS
 //---------------------------------------------------------------------------//
+
+TEST( VerletList, FloatPositions2d ) { testVerletListFloatPositions<2>(); }
 
 TEST( VerletList, Full2d )
 {

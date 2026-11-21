@@ -95,10 +95,10 @@ class NeighborDiscriminator<FullNeighborTag>
       not neighbor itself (i.e. the particle index "p" is not the same as the
       neighbor index "n").
     */
-    template <std::size_t NumSpaceDim>
+    template <std::size_t NumSpaceDim, class Scalar = double>
     KOKKOS_INLINE_FUNCTION static bool
-    isValid( const std::size_t p, const Kokkos::Array<double, NumSpaceDim>,
-             const std::size_t n, const Kokkos::Array<double, NumSpaceDim> )
+    isValid( const std::size_t p, const Kokkos::Array<Scalar, NumSpaceDim>,
+             const std::size_t n, const Kokkos::Array<Scalar, NumSpaceDim> )
     {
         return ( p != n );
     }
@@ -136,16 +136,19 @@ class NeighborDiscriminator<HalfNeighborTag>
       checked next and finally the z direction if the y coordinates are the
       same.
     */
-    template <std::size_t NumSpaceDim>
+    template <std::size_t NumSpaceDim, class Scalar = double>
     KOKKOS_INLINE_FUNCTION static bool
-    isValid( const std::size_t p, const Kokkos::Array<double, NumSpaceDim> xp,
-             const std::size_t n, const Kokkos::Array<double, NumSpaceDim> xn )
+    isValid( const std::size_t p, const Kokkos::Array<Scalar, NumSpaceDim> xp,
+             const std::size_t n, const Kokkos::Array<Scalar, NumSpaceDim> xn )
     {
-        return ( ( p != n ) &&
-                 ( ( xn[0] > xp[0] ) ||
-                   ( ( xn[0] == xp[0] ) &&
-                     ( ( xn[1] > xp[1] ) ||
-                       ( ( xn[1] == xp[1] ) && ( xn[2] > xp[2] ) ) ) ) ) );
+        if ( p == n )
+            return false;
+
+        constexpr std::size_t compare_dim = NumSpaceDim < 3 ? NumSpaceDim : 3;
+        for ( std::size_t d = 0; d < compare_dim; ++d )
+            if ( xn[d] != xp[d] )
+                return xn[d] > xp[d];
+        return false;
     }
 
     /*!
@@ -163,11 +166,7 @@ class NeighborDiscriminator<HalfNeighborTag>
     isValid( const std::size_t p, const Kokkos::Array<double, 3> xp,
              const std::size_t n, const Kokkos::Array<double, 3> xn )
     {
-        return ( ( p != n ) &&
-                 ( ( xn[0] > xp[0] ) ||
-                   ( ( xn[0] == xp[0] ) &&
-                     ( ( xn[1] > xp[1] ) ||
-                       ( ( xn[1] == xp[1] ) && ( xn[2] > xp[2] ) ) ) ) ) );
+        return isValid<3>( p, xp, n, xn );
     }
 
     /*!
@@ -185,9 +184,7 @@ class NeighborDiscriminator<HalfNeighborTag>
     isValid( const std::size_t p, const Kokkos::Array<double, 2> xp,
              const std::size_t n, const Kokkos::Array<double, 2> xn )
     {
-        return ( ( p != n ) &&
-                 ( ( xn[0] > xp[0] ) ||
-                   ( ( xn[0] == xp[0] ) && ( ( xn[1] > xp[1] ) ) ) ) );
+        return isValid<2>( p, xp, n, xn );
     }
 
     /*!

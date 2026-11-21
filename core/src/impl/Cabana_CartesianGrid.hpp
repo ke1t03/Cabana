@@ -66,9 +66,9 @@ class CartesianGrid
         {
             _min[d] = min[d];
             _max[d] = max[d];
-            _nx[d] = cellsBetween( max[d], min[d], 1.0 / delta[d] );
+            _nx[d] = cellsBetween( max[d], min[d], Real{ 1 } / delta[d] );
             _dx[d] = ( max[d] - min[d] ) / _nx[d];
-            _rdx[d] = 1.0 / _dx[d];
+            _rdx[d] = Real{ 1 } / _dx[d];
         }
     }
 
@@ -80,17 +80,17 @@ class CartesianGrid
         : _min( { min_x, min_y, min_z } )
         , _max( { max_x, max_y, max_z } )
     {
-        _nx[0] = cellsBetween( max_x, min_x, 1.0 / delta_x );
-        _nx[1] = cellsBetween( max_y, min_y, 1.0 / delta_y );
-        _nx[2] = cellsBetween( max_z, min_z, 1.0 / delta_z );
+        _nx[0] = cellsBetween( max_x, min_x, Real{ 1 } / delta_x );
+        _nx[1] = cellsBetween( max_y, min_y, Real{ 1 } / delta_y );
+        _nx[2] = cellsBetween( max_z, min_z, Real{ 1 } / delta_z );
 
         _dx[0] = ( max_x - min_x ) / _nx[0];
         _dx[1] = ( max_y - min_y ) / _nx[1];
         _dx[2] = ( max_z - min_z ) / _nx[2];
 
-        _rdx[0] = 1.0 / _dx[0];
-        _rdx[1] = 1.0 / _dx[1];
-        _rdx[2] = 1.0 / _dx[2];
+        _rdx[0] = Real{ 1 } / _dx[0];
+        _rdx[1] = Real{ 1 } / _dx[1];
+        _rdx[2] = Real{ 1 } / _dx[2];
     }
 
     // Get the total number of cells.
@@ -208,14 +208,15 @@ class CartesianGrid
     minDistanceToPoint( const Kokkos::Array<Real, num_space_dim> x,
                         const Kokkos::Array<int, num_space_dim> c ) const
     {
-        Real rsqr = 0.0;
+        Real rsqr = 0;
         for ( std::size_t d = 0; d < num_space_dim; ++d )
         {
-            Real xc = _min[d] + ( c[d] + 0.5 ) * _dx[d];
-            Real rx = fabs( x[d] - xc ) - 0.5 * _dx[d];
-
-            rx = ( rx > 0.0 ) ? rx : 0.0;
-
+            // Relative cell bounds avoid rounding the center at large offsets.
+            const Real xp = x[d] - _min[d];
+            const Real lower = c[d] * _dx[d];
+            const Real upper = ( c[d] + 1 ) * _dx[d];
+            const Real closest = Kokkos::clamp( xp, lower, upper );
+            const Real rx = xp - closest;
             rsqr += rx * rx;
         }
 
